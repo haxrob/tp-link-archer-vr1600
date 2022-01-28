@@ -1,14 +1,11 @@
 # tp-link-archer
 TP-Link VR1600v2 / AC1600 router reversing
 
-
-TP-Link VR1600v2 / AC1600 router reversing
+# Accessing the UART port
 
 The [TP-Link VR1600](https://www.tp-link.com/au/service-provider/xdsl/archer-vr1600v/) router received from my ISP TPG Australia is particularly locked down. An earlier model / software image used to have a hidden super user account `sa` which let people modify the system settings not available to the `admin` account provided to the end customer. This account / password no longer works. Given that TPG can remotely access and update the router, and given services that are exposed on the Internet, there is good motivation to reclaim and take ownership of the device. 
 
 TLDR; the `sa` account has been removed from the configuration file in the image (although the password is still provisioned). It is possible with a little effort to gain a root shell on the router to make modifications. TP-Link has deliberately disconnected these pins from the Broadcom chip by removing two resistors which need to be ‘replaced’. 
-
-![router](img/router.png)
 
 On the board there is the possibility to connect to the serial / UART of the Broadcom SoC the following is the view from the underneath the board. I had already soldered a header on, normally these would be unpopulated.
 
@@ -31,20 +28,51 @@ Withe header and resistors added, we are now ready to rock.
 
 ![router](img/UART4.png)
 
-Here I opted to use the bus pirate
-
-![router(img
-
 Serial connection parameters are:
-- 115200 baud
-- Parity
 
-On powering the device, we are presented with a boot sequence with an eventual login prompt. The login credentials are `admin` / `1234`.
+- 115200 baud
+- Parity none
+- Databits 8
+- Stop bits 1 
+
+On powering the device, we have the choice to jump into a menu item that will allow us to dump / erase / write to the flash by interupting the boot sequence, or we can let it run through to the login prompt.
+
+![router](img/boot1.png)
+
+The login credentials are `admin` / `1234`.
+
+![router](img/boot2.png)
 
 ## Dumping flash
 
 By hitting the `t` key repetitively we can gain access to the [CFE](https://en.wikipedia.org/wiki/Common_Firmware_Environment) interface. From there it is possible to dump the flash contents (abit slowly). I took this route initially in order to find the initial credentials which happened to be stored in plain-text in flash. Here [CFE-Dump](https://github.com/Depau/bcm-cfedump) did the trick with the following:
+
 `python -m bcm_cfedump -D /dev/ttyUSB0 -O nand.img  nand`
 
-Binwalk can then be used to recursively extract the file system, although it has troubles with the JFFS2 partitions. 
+Note, the vanilla binwalk installation from apt/yum won't cut it as there are additional dependencies required which can be installed from the [binwalk repo](https://github.com/ReFirmLabs/binwalk/wiki/Quick-Start-Guide) by running `./binwalk-master/deps.sh`
 
+```
+# binwalk nand.img
+
+DECIMAL       HEXADECIMAL     DESCRIPTION
+--------------------------------------------------------------------------------
+131072        0x20000         JFFS2 filesystem, big endian
+2883584       0x2C0000        UBI erase count header, version: 1, EC: 0x1, VID header offset: 0x800, data offset: 0x1000
+129892352     0x7BE0000       JFFS2 filesystem, big endian
+```
+
+Binwalk can then be used to recursively extract the file system, although it has troubles with the JFFS2 partitions. I suspect this was due to an issue in the 3rd party lib that binwalk uses to extract. 
+
+This did the job:
+```
+apt-get install mtd-utils
+jffs2dump -b -c -r -e 20000.jffs2.le 20000.jffs2
+modprobe jffs2
+mtdram
+mtdchar
+mtdblock
+dd if=20000.jffs2.le of=/dev/mtdblock0
+mkdir /mnt/20000.jffs2/
+mount -t jffs2 /dev/mtdblock0 /mnt/20000.jffs2
+```
+Note: there isn't really that much to see here. the JFFS2 volume  mounts to /data which is used to store the working config files changes. 
