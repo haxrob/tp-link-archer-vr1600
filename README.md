@@ -100,17 +100,13 @@ We can verify this by inspecting `/etc/reduced_data_model_decrypted.xml` which i
 Decrypting these XML files can be achieved with the following:
 ```
 openssl enc -d -des-ecb -nopad -K 488CB50BE9F3A2CF -in default_config.xml -out default_config_decrypted.xml
-
+```
 Note this method is also documented [here](https://github.com/sta-c0000/tpconf_bin_xml), although the DES key is different. Interesting enough, you can use `tpconf_bin_xml.py` from that repo to also decrypt `/mnt/MFG_conf.bin` The DES key in this script is for the Archer Cx series which leads me to believe MFG_conf.bin is a remnant from a previous image / version.
 
 Spinning up [Ghidra](https://ghidra-sre.org/) the key is `488CB50BE9F3A2CF` is found:
 
-
-
 ```
 The DES key has been changed in this model. It is found in:
 
-
-`[ dm_readFile ] 2063:  can not open xml file /var/tmp/pc/reduced_data_model.xml!, about to open file /etc/reduced_data_model.xml`
-
+` [ dm_readFile ] 2063:  can not open xml file /var/tmp/pc/reduced_data_model.xml!, about to open file /etc/reduced_data_model.xml`
 
