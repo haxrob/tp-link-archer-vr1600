@@ -76,3 +76,41 @@ mkdir /mnt/20000.jffs2/
 mount -t jffs2 /dev/mtdblock0 /mnt/20000.jffs2
 ```
 Note: there isn't really that much to see here. the JFFS2 volume  mounts to /data which is used to store the working config files changes. 
+## What happened to the sa user ?
+
+It appears to be removed from the configuration (`<AdminName>`). Interesting enough the password is still there. While the base image config file is encrypted, the active config in the flash /data/config. It is encrypted   
+```
+    <X_TP_UserCfg>
+      <AdminPwd val=VExy!64a3ng />
+      <UserName val=admin />
+      <UserPwd val=admin/>
+    </X_TP_UserCfg>
+```
+
+We can verify this by inspecting `/etc/reduced_data_model_decrypted.xml` which is a specification / schema for the TP-Link config file format:
+```
+               <X_TP_UserCfg t=o r=P s=USER_CFG_OBJ h=1>
+			...
+                        <AdminName t=s r=W l=16 al=cli h=1 />
+                        <AdminPwd t=s r=W l=16 al=cli h=1 />
+                        <UserName t=s r=W l=16 al=cli h=1 />
+                        <UserPwd t=s r=W l=16 al=cli h=1 />
+			...
+```
+Decrypting these XML files can be achieved with the following:
+```
+openssl enc -d -des-ecb -nopad -K 488CB50BE9F3A2CF -in default_config.xml -out default_config_decrypted.xml
+
+Note this method is also documented [here](https://github.com/sta-c0000/tpconf_bin_xml), although the DES key is different. Interesting enough, you can use `tpconf_bin_xml.py` from that repo to also decrypt `/mnt/MFG_conf.bin` The DES key in this script is for the Archer Cx series which leads me to believe MFG_conf.bin is a remnant from a previous image / version.
+
+Spinning up [Ghidra](https://ghidra-sre.org/) the key is `488CB50BE9F3A2CF` is found:
+
+
+
+```
+The DES key has been changed in this model. It is found in:
+
+
+`[ dm_readFile ] 2063:  can not open xml file /var/tmp/pc/reduced_data_model.xml!, about to open file /etc/reduced_data_model.xml`
+
+
